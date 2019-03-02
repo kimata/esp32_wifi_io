@@ -1,0 +1,24 @@
+@import '~bootstrap/scss/bootstrap';
+
+@import '~ngx-toastr/toastr.css';
+@import '~ngx-toastr/toastr-bs4-alert';
+
+.jumbotron {
+    padding: 2rem 2rem !important;
+}
+
+button:active {
+  transform: translateY(4px);
+}
+
+.toast {
+    opacity: 1 !important;
+}
+
+.toast-success {
+    color: #155724 !important
+}
+
+.toast-error {
+    color: #a94442 !important
+}

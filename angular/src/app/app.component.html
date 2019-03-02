@@ -1,0 +1,32 @@
+<header>
+  <div class="col-xl-6 offset-xl-3 col-lg-8 offset-lg-2 col-md-10 offset-md-1">
+    <div class="jumbotron">
+      <h1>ESP32 WiFi IO</h1>
+      <p>ボタンをクリックすると，GPIO 出力が 300ms 間 L 出力になります．</p>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="row mb-4">
+    <div class="col-xl-6 offset-xl-3 col-lg-8 offset-lg-2 col-md-10 offset-md-1">
+      <ng-container *ngFor="let gpio of gpio_list">
+        <div class="mb-3">
+          <label class="mr-5"><h5>GPIO{{gpio}}</h5></label>
+          <button type="button" class="btn btn-primary" (click)="buttonClick(gpio)">
+            click
+          </button>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</div>
+
+<footer class="col-xl-6 offset-xl-3 col-lg-8 offset-lg-2 col-md-10 offset-md-1 mb-4">
+  <p class="text-muted m-0">name: {{ app_info.name }}</p>
+  <p class="text-muted m-0">version: {{ app_info.version }}</p>
+  <p class="text-muted m-0">esp-idf: {{ app_info.esp_idf }}</p>
+  <p class="text-muted m-0">compile: {{ app_info.compile_date }} {{ app_info.compile_time }}</p>
+  <p class="text-muted m-0">elapsed: {{ app_info.elapsed }}</p>
+</footer>
+
