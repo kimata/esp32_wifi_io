@@ -13,6 +13,9 @@
 // #define WIFI_SSID "XXXXXXXX"            // WiFi SSID
 // #define WIFI_PASS "XXXXXXXX"            // WiFi Password
 
+static const uint32_t FATAL_DISCON_COUNT = 5;
+
+static uint32_t wifi_discon_count = 0;
 static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
 
@@ -147,10 +150,12 @@ static esp_err_t wifi_connect()
     if (xSemaphoreTake(wifi_start, 10000 / portTICK_RATE_MS) == pdTRUE) {
         ESP_LOGI(TAG, "Succeeded in connecting to WiFi.");
         wifi_log_rssi();
+        wifi_discon_count = 0;
         xSemaphoreGive(wifi_start);
         return ESP_OK;
     } else {
         ESP_LOGE(TAG, "Failed to connect to WiFi.");
+        wifi_discon_count++;
         xSemaphoreGive(wifi_start);
         xSemaphoreGive(wifi_stop);
         return ESP_FAIL;
@@ -174,6 +179,11 @@ static void wifi_watch_task(void *param) {
 
     while (1) {
         if (xSemaphoreTake(wifi_stop, 30000 / portTICK_RATE_MS) == pdTRUE) {
+            ESP_LOGI(TAG, "WiFi disconnect count: %d",  wifi_discon_count);
+            // NOTE: 接続に一定回数連続して失敗したら，何かがおかしいので再起動する．
+            if (wifi_discon_count >= FATAL_DISCON_COUNT) {
+                esp_restart();
+            }
             wifi_disconnect();
             if ((wifi_connect() == ESP_OK) && (mutex != NULL)) {
                 xSemaphoreGive(mutex);
