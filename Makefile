@@ -11,6 +11,9 @@ ota: all
 ifeq ($(strip $(IP_ADDR)),)
 	@echo "\nERROR: Please specify IP_ADDR."
 else
-	curl $(IP_ADDR)/ota/ --write-out 'Elapsed Time: %{time_total}s (speed: %{speed_upload} bytes/sec)\n' \
+	echo -n "\nFirmware: "
+	du -h build/$(PROJECT_NAME).bin
+	echo ""
+	curl $(IP_ADDR)/ota/ --write-out '\nElapsed Time: %{time_total}s (speed: %{speed_upload} bytes/sec)\n' \
 		--no-buffer --data-binary @- < build/$(PROJECT_NAME).bin
 endif

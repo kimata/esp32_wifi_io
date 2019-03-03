@@ -70,7 +70,7 @@ static esp_err_t http_handle_ota(httpd_req_t *req)
     ESP_ERROR_CHECK(esp_ota_set_boot_partition(part));
     ESP_LOGI(TAG, "Finished writing firmware.");
 
-    httpd_resp_sendstr_chunk(req, "*\nOK\n");
+    httpd_resp_sendstr_chunk(req, "*\nComplete.\n");
     httpd_resp_sendstr_chunk(req, NULL);
 
     xTaskCreate(restart_task, "restart_task", 1024, NULL, 10, NULL);
