@@ -16,6 +16,69 @@
 static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
 
+static void wifi_disconnect()
+{
+    ESP_LOGI(TAG, "Disconnect WiFi.");
+    ESP_ERROR_CHECK(esp_wifi_disconnect());
+    ESP_ERROR_CHECK(esp_wifi_stop());
+}
+
+static const char *wifi_authmode_str(wifi_auth_mode_t mode)
+{
+    switch (mode) {
+    case WIFI_AUTH_OPEN:
+        return "open";
+    case WIFI_AUTH_WEP:
+        return "WEP";
+    case WIFI_AUTH_WPA_PSK:
+        return "WPA_PSK";
+    case WIFI_AUTH_WPA2_PSK:
+        return "WPA2_PSK";
+    case WIFI_AUTH_WPA_WPA2_PSK:
+        return "WPA_WPA2_PSK";
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+        return "WPA2_ENTERPRISE";
+    default:
+        return "?";
+    }
+}
+
+static const char *wifi_cipher_type_str(wifi_cipher_type_t type)
+{
+    switch (type) {
+    case WIFI_CIPHER_TYPE_NONE:
+        return "none";
+    case WIFI_CIPHER_TYPE_WEP40:
+        return "WEP40";
+    case WIFI_CIPHER_TYPE_WEP104:
+        return "WEP104";
+    case WIFI_CIPHER_TYPE_TKIP:
+        return "TKIP";
+    case WIFI_CIPHER_TYPE_CCMP:
+        return "CCMP";
+    case WIFI_CIPHER_TYPE_TKIP_CCMP:
+        return "TKIP and CCMP";
+    default:
+        return "?";
+    }
+}
+
+static void wifi_log_rssi()
+{
+    wifi_ap_record_t ap_info;
+
+    if (esp_wifi_sta_get_ap_info(&ap_info) != OK) {
+        ESP_LOGE(TAG, "Failed to get AP info.");
+        return;
+    }
+
+    ESP_LOGI(TAG, "WiFi status: SSID=%s, CH=%d, AUTH=%s, CIPHER=%s, RSSI=%d",
+             ap_info.ssid, ap_info.primary,
+             wifi_authmode_str(ap_info.authmode),
+             wifi_cipher_type_str(ap_info.pairwise_cipher),
+             ap_info.rssi);
+}
+
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {
@@ -83,21 +146,15 @@ static esp_err_t wifi_connect()
     ESP_ERROR_CHECK(esp_wifi_start());
     if (xSemaphoreTake(wifi_start, 10000 / portTICK_RATE_MS) == pdTRUE) {
         ESP_LOGI(TAG, "Succeeded in connecting to WiFi.");
+        wifi_log_rssi();
         xSemaphoreGive(wifi_start);
         return ESP_OK;
     } else {
-        ESP_LOGE(TAG, "Failed to connect WiFi.");
+        ESP_LOGE(TAG, "Failed to connect to WiFi.");
         xSemaphoreGive(wifi_start);
         xSemaphoreGive(wifi_stop);
         return ESP_FAIL;
     }
-}
-
-static void wifi_disconnect()
-{
-    ESP_LOGI(TAG, "Disconnect WiFi.");
-    ESP_ERROR_CHECK(esp_wifi_disconnect());
-    ESP_ERROR_CHECK(esp_wifi_stop());
 }
 
 static void wifi_watch_task(void *param) {
