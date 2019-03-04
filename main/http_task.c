@@ -25,6 +25,8 @@ extern const unsigned char scripts_js_start[] asm("_binary_scripts_js_gz_start")
 extern const unsigned char scripts_js_end[]   asm("_binary_scripts_js_gz_end");
 extern const unsigned char styles_css_start[] asm("_binary_styles_css_gz_start");
 extern const unsigned char styles_css_end[]   asm("_binary_styles_css_gz_end");
+extern const unsigned char favicon_ico_start[] asm("_binary_favicon_ico_gz_start");
+extern const unsigned char favicon_ico_end[]   asm("_binary_favicon_ico_gz_end");
 
 typedef struct static_content {
     const char *path;
@@ -41,6 +43,7 @@ static static_content_t content_list[] = {
     { "polyfills.js", polyfills_js_start, polyfills_js_end, "text/javascript", true, },
     { "scripts.js", scripts_js_start, scripts_js_end, "text/javascript", true, },
     { "styles.css", styles_css_start, styles_css_end, "text/css", true, },
+    { "favicon.ico", favicon_ico_start, favicon_ico_end, "image/x-icon", true, },
 };
 
 static esp_err_t http_handle_app(httpd_req_t *req)
