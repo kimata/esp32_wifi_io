@@ -5,7 +5,7 @@ all: build $(addsuffix .gz,$(addprefix $(DIST_PATH)/,$(DIST_FILES)))
 	@echo "*BEFORE"
 	@du -shc $(addprefix $(DIST_PATH)/,$(DIST_FILES))
 	@echo "*AFTER"
-	@du -shc *.gz
+	@du -shc $(addsuffix .gz,$(addprefix $(DIST_PATH)/,$(DIST_FILES)))
 
 build:
 	ng build --prod --base-href=/app/
