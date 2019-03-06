@@ -17,3 +17,8 @@ else
 	curl $(IP_ADDR)/ota/ --write-out '\nElapsed Time: %{time_total}s (speed: %{speed_upload} bytes/sec)\n' \
 		--no-buffer --data-binary @- < build/$(PROJECT_NAME).bin
 endif
+
+angular:
+	$(MAKE) -C angular
+
+.PHONY: angular
