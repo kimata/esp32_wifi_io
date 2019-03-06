@@ -182,6 +182,7 @@ static void wifi_watch_task(void *param) {
             ESP_LOGI(TAG, "WiFi disconnect count: %d",  wifi_discon_count);
             // NOTE: 接続に一定回数連続して失敗したら，何かがおかしいので再起動する．
             if (wifi_discon_count >= FATAL_DISCON_COUNT) {
+                ESP_LOGI(TAG, "Too many connect failures, restarting...");
                 esp_restart();
             }
             wifi_disconnect();
