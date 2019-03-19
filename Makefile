@@ -4,6 +4,7 @@
 #
 
 PROJECT_NAME := esp32_wifi_io
+ANGULAR_DIR  := ./angular
 
 include $(IDF_PATH)/make/project.mk
 
@@ -18,7 +19,9 @@ else
 		--no-buffer --data-binary @- < build/$(PROJECT_NAME).bin
 endif
 
-angular:
-	$(MAKE) -C angular
+component-main-build: $(ANGULAR_DIR)/dist/esp32-wifi-io/index.html
+
+$(ANGULAR_DIR)/dist/esp32-wifi-io/index.html:
+	$(MAKE) -C $(ANGULAR_DIR)
 
 .PHONY: angular
