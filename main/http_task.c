@@ -117,6 +117,8 @@ static esp_err_t process_api(const char *uri) {
 static esp_err_t http_handle_api(httpd_req_t *req)
 {
     esp_err_t api_result = process_api(req->uri);
+
+    ESP_ERROR_CHECK(httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*"));
     ESP_ERROR_CHECK(httpd_resp_set_type(req, "text/json"));
     if (api_result == ESP_OK) {
         httpd_resp_sendstr(req, "{ \"status\": \"OK\" }");
