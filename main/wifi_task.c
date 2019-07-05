@@ -162,7 +162,8 @@ static esp_err_t wifi_connect()
     }
 }
 
-static void wifi_watch_task(void *param) {
+static void wifi_watch_task(void *param)
+{
     SemaphoreHandle_t mutex = (SemaphoreHandle_t)param;
 
     ESP_ERROR_CHECK(esp_task_wdt_init(60, true));

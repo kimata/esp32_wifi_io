@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "esp_ota_ops.h"
+#include "driver/gpio.h"
 #include "cJSON.h"
 
 #include "app.h"
