@@ -1,8 +1,12 @@
 #include <string.h>
 
+#include "tcpip_adapter.h"
+#include "ping/ping.h"
+
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "esp_task_wdt.h"
+#include "esp_ping.h"
 
 #include "nvs_flash.h"
 
@@ -14,8 +18,11 @@
 // #define WIFI_PASS "XXXXXXXX"            // WiFi Password
 
 static const uint32_t FATAL_DISCON_COUNT = 5;
+static const uint32_t PING_COUNT = 5;
+static const uint32_t TIMEOUT_THRESHOLD = 5;
 
 static uint32_t wifi_discon_count = 0;
+static uint32_t timeout_count = 0;
 static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
 
@@ -162,9 +169,40 @@ static esp_err_t wifi_connect()
     }
 }
 
+esp_err_t pingResults(ping_target_id_t id, esp_ping_found * pf)
+{
+    if (pf->send_count == PING_COUNT) {
+        timeout_count = pf->timeout_count;
+    }
+
+    return ESP_OK;
+}
+
+static void ping_gatway()
+{
+    tcpip_adapter_ip_info_t ip_info;
+    uint32_t count = PING_COUNT;
+    uint32_t timeout_msec = 100;
+    uint32_t delay_msec = 500;
+
+    if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info) != ESP_OK) {
+        timeout_count = PING_COUNT;
+        return;
+    }
+
+    ping_deinit();
+    esp_ping_set_target(PING_TARGET_IP_ADDRESS_COUNT, &count, sizeof(uint32_t));
+    esp_ping_set_target(PING_TARGET_RCV_TIMEO, &timeout_msec, sizeof(uint32_t));
+    esp_ping_set_target(PING_TARGET_DELAY_TIME, &delay_msec, sizeof(uint32_t));
+    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &(ip_info.gw.addr), sizeof(uint32_t));
+    esp_ping_set_target(PING_TARGET_RES_FN, &pingResults, sizeof(pingResults));
+    ping_init();
+}
+
 static void wifi_watch_task(void *param)
 {
     SemaphoreHandle_t mutex = (SemaphoreHandle_t)param;
+    uint32_t timeout_repeat = 0;
 
     ESP_ERROR_CHECK(esp_task_wdt_init(60, true));
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
@@ -191,11 +229,21 @@ static void wifi_watch_task(void *param)
                 xSemaphoreGive(mutex);
             }
         }
+        if (timeout_count != 0) {
+            ESP_LOGW(TAG, "Ping timeout: %d / %d", timeout_count, PING_COUNT);
+            if (++timeout_repeat == TIMEOUT_THRESHOLD) {
+                ESP_LOGI(TAG, "Too many ping timeout, restarting...");
+                esp_restart();
+            }
+        } else {
+            timeout_repeat = 0;
+        }
+        ping_gatway();
         ESP_ERROR_CHECK(esp_task_wdt_reset());
     }
 }
 
 void wifi_task_start(SemaphoreHandle_t mutex)
 {
-    xTaskCreate(wifi_watch_task, "wifi_watch_task", 2048, mutex, 10, NULL);
+    xTaskCreate(wifi_watch_task, "wifi_watch_task", 4096, mutex, 10, NULL);
 }
