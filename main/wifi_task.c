@@ -18,11 +18,11 @@
 // #define WIFI_PASS "XXXXXXXX"            // WiFi Password
 
 static const uint32_t FATAL_DISCON_COUNT = 5;
-static const uint32_t PING_COUNT = 5;
+static const uint32_t PING_COUNT = 10;
 static const uint32_t TIMEOUT_THRESHOLD = 5;
 
 static uint32_t wifi_discon_count = 0;
-static uint32_t timeout_count = 0;
+static bool all_timeout = false;
 static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
 
@@ -169,10 +169,12 @@ static esp_err_t wifi_connect()
     }
 }
 
-esp_err_t pingResults(ping_target_id_t id, esp_ping_found * pf)
+static esp_err_t ping_handler(ping_target_id_t id, esp_ping_found * pf)
 {
     if (pf->send_count == PING_COUNT) {
-        timeout_count = pf->timeout_count;
+        if (pf->timeout_count == PING_COUNT) {
+            all_timeout = true;
+        }
     }
 
     return ESP_OK;
@@ -180,22 +182,31 @@ esp_err_t pingResults(ping_target_id_t id, esp_ping_found * pf)
 
 static void ping_gatway()
 {
+#ifdef DEBUG_PING_MONITOR
+    uint32_t test_ip = ipaddr_addr("192.168.2.250");
+#endif
     tcpip_adapter_ip_info_t ip_info;
     uint32_t count = PING_COUNT;
-    uint32_t timeout_msec = 100;
+    uint32_t timeout_msec = 500;
     uint32_t delay_msec = 500;
 
     if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info) != ESP_OK) {
-        timeout_count = PING_COUNT;
+        all_timeout = true;
         return;
     }
 
     ping_deinit();
+
+#ifndef DEBUG_PING_MONITOR
+    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &(ip_info.gw.addr), sizeof(uint32_t));
+#else
+    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &test_ip, sizeof(uint32_t));
+#endif
+
     esp_ping_set_target(PING_TARGET_IP_ADDRESS_COUNT, &count, sizeof(uint32_t));
     esp_ping_set_target(PING_TARGET_RCV_TIMEO, &timeout_msec, sizeof(uint32_t));
     esp_ping_set_target(PING_TARGET_DELAY_TIME, &delay_msec, sizeof(uint32_t));
-    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &(ip_info.gw.addr), sizeof(uint32_t));
-    esp_ping_set_target(PING_TARGET_RES_FN, &pingResults, sizeof(pingResults));
+    esp_ping_set_target(PING_TARGET_RES_FN, &ping_handler, sizeof(ping_handler));
     ping_init();
 }
 
@@ -217,7 +228,7 @@ static void wifi_watch_task(void *param)
     }
 
     while (1) {
-        if (xSemaphoreTake(wifi_stop, 30000 / portTICK_RATE_MS) == pdTRUE) {
+        if (xSemaphoreTake(wifi_stop, 10000 / portTICK_RATE_MS) == pdTRUE) {
             ESP_LOGI(TAG, "WiFi disconnect count: %d",  wifi_discon_count);
             // NOTE: 接続に一定回数連続して失敗したら，何かがおかしいので再起動する．
             if (wifi_discon_count >= FATAL_DISCON_COUNT) {
@@ -229,8 +240,8 @@ static void wifi_watch_task(void *param)
                 xSemaphoreGive(mutex);
             }
         }
-        if (timeout_count != 0) {
-            ESP_LOGW(TAG, "Ping timeout: %d / %d", timeout_count, PING_COUNT);
+        if (all_timeout) {
+            ESP_LOGW(TAG, "Ping timeout occurred.");
             if (++timeout_repeat == TIMEOUT_THRESHOLD) {
                 ESP_LOGI(TAG, "Too many ping timeout, restarting...");
                 esp_restart();
