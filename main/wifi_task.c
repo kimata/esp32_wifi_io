@@ -97,6 +97,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         if (event_id == WIFI_EVENT_STA_START) {
             ESP_LOGI(TAG, "Event: SYSTEM_EVENT_STA_START");
             ESP_ERROR_CHECK(esp_wifi_connect());
+            // MEMO: このタイミングで tcpip_adapter_set_hostname 呼ぶと
+            // ESP_ERR_TCPIP_ADAPTER_IF_NOT_READY になった．
         } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
             ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_STA, WIFI_HOSTNAME));
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
