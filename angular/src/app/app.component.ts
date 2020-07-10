@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, VERSION } from '@angular/core';
 import { HttpClient, HttpParams  } from '@angular/common/http';
 import { ToastrService } from 'ngx-toastr';
 
@@ -19,6 +19,7 @@ export class AppComponent implements OnInit {
         name: '?',
         version: '?',
         esp_idf: '?',
+        angular: VERSION.full,
         compile_date: '?',
         compile_time: '?',
         elapse: '?',
@@ -32,6 +33,7 @@ export class AppComponent implements OnInit {
         this.http.get('/status/').subscribe(
             json => {
                 this.app_info = json;
+                this.app_info.angular = VERSION.full;
             },
             error => {
                 // ignore
