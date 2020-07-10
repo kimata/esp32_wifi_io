@@ -1,12 +1,12 @@
 #include <string.h>
 
-#include "tcpip_adapter.h"
-#include "ping/ping.h"
-
-#include "esp_wifi.h"
+#include "esp_netif.h"
 #include "esp_event.h"
+#include "esp_spi_flash.h"
+#include "esp_wifi.h"
 #include "esp_task_wdt.h"
-#include "esp_ping.h"
+
+#include "ping/ping_sock.h"
 
 #include "nvs_flash.h"
 
@@ -25,7 +25,13 @@ static uint32_t wifi_discon_count = 0;
 static bool all_timeout = false;
 static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
+static SemaphoreHandle_t ping_end  = NULL;
 
+esp_event_handler_instance_t wifi_handler_any_id;
+esp_event_handler_instance_t wifi_handler_got_ip;
+
+//////////////////////////////////////////////////////////////////////
+// WiFi Function
 static void wifi_disconnect()
 {
     ESP_LOGI(TAG, "Disconnect WiFi.");
@@ -89,27 +95,22 @@ static void wifi_log_rssi()
              ap_info.rssi);
 }
 
-
 static void event_handler(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data)
+                          int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT) {
-        if (event_id == WIFI_EVENT_STA_START) {
-            ESP_LOGI(TAG, "Event: SYSTEM_EVENT_STA_START");
-            ESP_ERROR_CHECK(esp_wifi_connect());
-            // MEMO: このタイミングで tcpip_adapter_set_hostname 呼ぶと
-            // ESP_ERR_TCPIP_ADAPTER_IF_NOT_READY になった．
-        } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
-            ESP_ERROR_CHECK(tcpip_adapter_set_hostname(TCPIP_ADAPTER_IF_STA, WIFI_HOSTNAME));
-        } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
-            ESP_LOGI(TAG, "Event: SYSTEM_EVENT_STA_DISCONNECTED");
-            xSemaphoreGive(wifi_stop);
-        }
-    } else if (event_base == IP_EVENT) {
-        if (event_id == IP_EVENT_STA_GOT_IP) {
-            ESP_LOGI(TAG, "Event: SYSTEM_EVENT_STA_GOT_IP");
-            xSemaphoreGive(wifi_start);
-        }
+    static uint32_t retry = 0;
+
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        ESP_ERROR_CHECK(esp_wifi_connect());
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        retry++;
+        esp_wifi_connect();
+        ESP_LOGI(TAG, "retry to connect to the AP (n=%d)", retry);
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "got ip: " IPSTR, IP2STR(&event->ip_info.ip));
+        retry = 0;
+        xSemaphoreGive(wifi_start);
     }
 }
 
@@ -124,16 +125,16 @@ static void init_wifi()
     }
     ESP_ERROR_CHECK(ret);
 
-    tcpip_adapter_init();
-
+    ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
+
+    esp_netif_t *esp_netif = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
 #ifdef WIFI_SSID
     wifi_config_t wifi_config = {
@@ -147,10 +148,23 @@ static void init_wifi()
 
     if (strcmp((const char *)wifi_config_cur.sta.ssid, (const char *)wifi_config.sta.ssid) ||
         strcmp((const char *)wifi_config_cur.sta.password, (const char *)wifi_config.sta.password)) {
-        ESP_LOGI(TAG, "Save WIFI config.");
+        ESP_LOGI(TAG, "SAVE WIFI CONFIG");
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     }
 #endif
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &wifi_handler_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        IP_EVENT_STA_GOT_IP,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &wifi_handler_got_ip));
+
+    ESP_ERROR_CHECK(esp_netif_set_hostname(esp_netif, WIFI_HOSTNAME));
 }
 
 static esp_err_t wifi_connect()
@@ -173,45 +187,61 @@ static esp_err_t wifi_connect()
     }
 }
 
-static esp_err_t ping_handler(ping_target_id_t id, esp_ping_found * pf)
+//////////////////////////////////////////////////////////////////////
+// Ping Function
+static void ping_on_success(esp_ping_handle_t hdl, void *args)
 {
-    if (pf->send_count == PING_COUNT) {
-        if (pf->timeout_count == PING_COUNT) {
-            all_timeout = true;
-        }
-    }
-
-    return ESP_OK;
+    // Do nothing
 }
 
-static void ping_gatway()
+static void ping_on_timeout(esp_ping_handle_t hdl, void *args)
 {
-#ifdef DEBUG_PING_MONITOR
-    uint32_t test_ip = ipaddr_addr("192.168.2.250");
-#endif
+    // Do nothing
+}
+
+static void ping_on_end(esp_ping_handle_t hdl, void *args)
+{
+    uint32_t received = 0;
+
+    ESP_ERROR_CHECK(esp_ping_get_profile(hdl, ESP_PING_PROF_REPLY,
+                                         &received, sizeof(received)));
+
+    all_timeout = (received == 0);
+    esp_ping_delete_session(hdl);
+
+    xSemaphoreGive(ping_end);
+}
+
+void ping_gateway()
+{
+    ip_addr_t target_addr;
     tcpip_adapter_ip_info_t ip_info;
-    uint32_t count = PING_COUNT;
-    uint32_t timeout_msec = 500;
-    uint32_t delay_msec = 500;
+    esp_ping_handle_t ping;
+
+    esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
+    esp_ping_callbacks_t cbs = {
+        .on_ping_success = ping_on_success,
+        .on_ping_timeout = ping_on_timeout,
+        .on_ping_end = ping_on_end,
+        .cb_args = NULL
+    };
 
     if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info) != ESP_OK) {
         all_timeout = true;
         return;
     }
 
-    ping_deinit();
+    target_addr.type = 0;
+    target_addr.u_addr.ip4.addr = ip_info.gw.addr;
+    ping_config.target_addr = target_addr;
 
-#ifndef DEBUG_PING_MONITOR
-    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &(ip_info.gw.addr), sizeof(uint32_t));
-#else
-    esp_ping_set_target(PING_TARGET_IP_ADDRESS, &test_ip, sizeof(uint32_t));
-#endif
+    ping_config.count = PING_COUNT;
 
-    esp_ping_set_target(PING_TARGET_IP_ADDRESS_COUNT, &count, sizeof(uint32_t));
-    esp_ping_set_target(PING_TARGET_RCV_TIMEO, &timeout_msec, sizeof(uint32_t));
-    esp_ping_set_target(PING_TARGET_DELAY_TIME, &delay_msec, sizeof(uint32_t));
-    esp_ping_set_target(PING_TARGET_RES_FN, &ping_handler, sizeof(ping_handler));
-    ping_init();
+    esp_ping_new_session(&ping_config, &cbs, &ping);
+
+    xSemaphoreTake(ping_end, portMAX_DELAY);
+    esp_ping_start(ping);
+    xSemaphoreTake(ping_end, portMAX_DELAY);
 }
 
 static void wifi_watch_task(void *param)
@@ -224,6 +254,7 @@ static void wifi_watch_task(void *param)
 
     vSemaphoreCreateBinary(wifi_start);
     vSemaphoreCreateBinary(wifi_stop);
+    vSemaphoreCreateBinary(ping_end);
 
     init_wifi();
     xSemaphoreTake(wifi_stop, portMAX_DELAY);
@@ -244,6 +275,9 @@ static void wifi_watch_task(void *param)
                 xSemaphoreGive(mutex);
             }
         }
+
+        ping_gateway();
+
         if (all_timeout) {
             ESP_LOGW(TAG, "Ping timeout occurred.");
             if (++timeout_repeat == TIMEOUT_THRESHOLD) {
@@ -253,7 +287,6 @@ static void wifi_watch_task(void *param)
         } else {
             timeout_repeat = 0;
         }
-        ping_gatway();
         ESP_ERROR_CHECK(esp_task_wdt_reset());
     }
 }

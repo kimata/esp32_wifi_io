@@ -8,7 +8,7 @@ ANGULAR_DIR  := ./angular
 
 include $(IDF_PATH)/make/project.mk
 
-ota: all
+ota: build/$(PROJECT_NAME).bin
 ifeq ($(strip $(IP_ADDR)),)
 	@echo "\nERROR: Please specify IP_ADDR."
 else
