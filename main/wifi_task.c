@@ -242,6 +242,8 @@ void ping_gateway()
     xSemaphoreTake(ping_end, portMAX_DELAY);
     esp_ping_start(ping);
     xSemaphoreTake(ping_end, portMAX_DELAY);
+
+    xSemaphoreGive(ping_end);
 }
 
 static void wifi_watch_task(void *param)
