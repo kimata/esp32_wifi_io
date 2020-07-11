@@ -7,8 +7,8 @@
 #define BUF_SIZE  1024
 
 static void restart_task(void *param) {
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
     ESP_LOGI(TAG, "Restart...");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     esp_restart();
 }
 
