@@ -27,9 +27,6 @@ static SemaphoreHandle_t wifi_start = NULL;
 static SemaphoreHandle_t wifi_stop  = NULL;
 static SemaphoreHandle_t ping_end  = NULL;
 
-esp_event_handler_instance_t wifi_handler_any_id;
-esp_event_handler_instance_t wifi_handler_got_ip;
-
 //////////////////////////////////////////////////////////////////////
 // WiFi Function
 static void wifi_disconnect()
@@ -153,16 +150,14 @@ static void init_wifi()
     }
 #endif
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &wifi_handler_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &event_handler,
-                                                        NULL,
-                                                        &wifi_handler_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT,
+                                               ESP_EVENT_ANY_ID,
+                                               &event_handler,
+                                               NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT,
+                                               IP_EVENT_STA_GOT_IP,
+                                               &event_handler,
+                                               NULL));
 
     ESP_ERROR_CHECK(esp_netif_set_hostname(esp_netif, WIFI_HOSTNAME));
 }
