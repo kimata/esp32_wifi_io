@@ -1,7 +1,8 @@
 @import '~bootstrap/scss/bootstrap';
 
-@import '~ngx-toastr/toastr.css';
-@import '~ngx-toastr/toastr-bs4-alert';
+@import '~ngx-toastr/toastr';
+// MEMO: Bootstrap 5 だとエラーになるのでコメントアウト
+// @import '~ngx-toastr/toastr-bs4-alert';
 
 .jumbotron {
     padding: 2rem 2rem !important;
@@ -16,9 +17,11 @@ button:active {
 }
 
 .toast-success {
-    color: #155724 !important
+    color: #155724 !important;
+    background: #E8FFED !important;
 }
 
 .toast-error {
-    color: #a94442 !important
+    color: #a94442 !important;
+    background: #F8E2E1 !important;
 }

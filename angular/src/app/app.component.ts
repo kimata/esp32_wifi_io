@@ -47,11 +47,11 @@ export class AppComponent implements OnInit {
                 if (json["status"] == "OK") {
                     this.toastrService.success('正常に制御できました．', '成功');
                 } else {
-                    this.toastrService.error('制御に失敗しました．', '失敗'); 
+                    this.toastrService.error('制御に失敗しました．', '失敗');
                 }
             },
             error => {
-                this.toastrService.error('制御に失敗しました．', '失敗'); 
+                this.toastrService.error('制御に失敗しました．', '失敗');
             }
         );
     }
